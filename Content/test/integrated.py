@@ -9,6 +9,19 @@ import torch
 import cv2
 import xml.etree.ElementTree as ET
 
+class AddGaussianNoise:
+    def __init__(self, mean=0.0, std=1.0, probability=0.6):
+        self.mean = mean
+        self.std = std
+        self.probability = probability
+
+    def __call__(self, tensor):
+        if random.random() < self.probability:
+            noise = torch.randn(tensor.size()) * self.std + self.mean
+            tensor = tensor + noise
+            tensor = torch.clamp(tensor, 0., 1.)  # Ensure the tensor values are within [0, 1]
+        return tensor
+
 def __make_power_2(img, base, method=Image.BICUBIC):
     ow, oh = img.size
     h = int(round(oh / base) * base)
@@ -51,7 +64,7 @@ def __flip(img, flip):
         return img.transpose(Image.FLIP_LEFT_RIGHT)
     return img
 
-def get_transform(opt, params=None, grayscale=False, method=Image.BICUBIC, convert=True):
+def get_transform(opt, params=None, grayscale=False, method=Image.BICUBIC, convert=True, noise=False):
     transform_list = []
     if grayscale:
         transform_list.append(transforms.Grayscale(1))
@@ -78,6 +91,8 @@ def get_transform(opt, params=None, grayscale=False, method=Image.BICUBIC, conve
 
     if convert:
         transform_list += [transforms.ToTensor()]
+        if noise:
+            transform_list += [AddGaussianNoise(mean=0.0, std=0.1, probability=0.5)]
         if grayscale:
             transform_list += [transforms.Normalize((0.5,), (0.5,))]
         else:
@@ -157,7 +172,7 @@ def create_facade_input(size,offset):
             
     cv2.imwrite("{}I.png".format(offset), result[:, :, [2, 1, 0]])
 
-def create_img(inputpath,stylepath=None):
+def create_img(inputpath,stylepath=None,noise=False):
     # test stage
     A_path = inputpath
     if stylepath is None:
@@ -170,8 +185,8 @@ def create_img(inputpath,stylepath=None):
 
     # apply the same transform to both A and B
     transform_params = get_params(opt, (256,256))
-    A_transform = get_transform(opt, transform_params, grayscale=(opt.input_nc == 1))
-    B_transform = get_transform(opt, transform_params, grayscale=(opt.output_nc == 1))
+    A_transform = get_transform(opt, transform_params, grayscale=(opt.input_nc == 1),noise=noise)
+    B_transform = get_transform(opt, transform_params, grayscale=(opt.output_nc == 1),noise=noise)
 
     A = torch.reshape(A_transform(A), (1, 3, 256, 256))
     B = torch.reshape(B_transform(B), (1, 3, 256, 256))
@@ -201,9 +216,9 @@ def create_img(inputpath,stylepath=None):
     
     return result
 
-def create_facade(mask,offset):
+def create_facade(mask,offset,style=None):
     box=create_facde_labemap(mask,offset)
-    create_facade_texture("{}L.png".format(offset),offset)
+    create_facade_texture("{}L.png".format(offset),offset,style)
     crop_facade(offset,box)
     xml_rewrite("{}.xml".format(offset),box)
 
@@ -217,10 +232,12 @@ def create_facde_labemap(mask,offset):
     cv2.imwrite("{}L.png".format(offset), aligned_img[:, :, [2, 1, 0]])
     return box
     
-def create_facade_texture(labelmap,offset):
+def create_facade_texture(labelmap,offset,style):
     set_up_model("./network/coarselabelmap2realimg")
-        
-    result=create_img(labelmap)
+    if style:
+        result=create_img(labelmap,style)
+    else:    
+        result=create_img(labelmap)
 
     cv2.imwrite("{}.png".format(offset), result[:, :, [2, 1, 0]])
 
@@ -239,7 +256,7 @@ def crop_facade(offset,box):
         [2, 1, 0]
         ])
     
-def creat_windows(xmlpath,offset):
+def creat_windows(xmlpath,offset,style=None):
     tree=ET.parse(xmlpath)
     root=tree.getroot()
     done=set()
@@ -249,12 +266,12 @@ def creat_windows(xmlpath,offset):
             continue
         done.add(id)
         size=(int(window.find("size").find("width").text),int(window.find("size").find("height").text))
-        creat_window(size,id,offset)
+        creat_window(size,id,offset,style)
 
-def creat_window(size,id,offset):
+def creat_window(size,id,offset,style):
     create_window_input(size,id,offset)
     box=create_window_labelmap("{}I.png".format(id+offset+2),id,offset)
-    create_window_texture("{}L.png".format(id+offset+2),id,offset)
+    create_window_texture("{}L.png".format(id+offset+2),id,offset,style)
     crop_window(id,offset,box)
     xml_rewrite("{}.xml".format(id+offset+2),box)
 
@@ -279,10 +296,12 @@ def create_window_labelmap(mask,id,offset):
     
     return box
     
-def create_window_texture(labelmap,id,offset):
+def create_window_texture(labelmap,id,offset,style=None):
     set_up_model("./network/window_labelmap2window_realimg")
-    #result=create_img(labelmap,"style5.png")
-    result=create_img(labelmap)
+    if style:
+        result=create_img(labelmap,style)
+    else:
+        result=create_img(labelmap)
     cv2.imwrite("{}.png".format(id+offset+2), result[:, :, [2, 1, 0]])
 
 def crop_window(id,offset,box):
@@ -294,12 +313,12 @@ def crop_window(id,offset,box):
         ])
     
 
-width,depth,height=6,8,10
+width,depth,height=5,12,7
 for i in range(4):
     if i%2:
         temp=depth
     else:
         temp=width
     create_facade_input((temp,height),16*i)
-    create_facade("{}I.png".format(16*i),16*i)
-    creat_windows("{}.xml".format(16*i),16*i)
+    create_facade("{}I.png".format(16*i),16*i,"facade_style.jpg")
+    creat_windows("{}.xml".format(16*i),16*i,"style3.png")
