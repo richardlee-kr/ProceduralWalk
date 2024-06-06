@@ -163,7 +163,7 @@ def set_up_model(network):
 
 def create_facade_input(size,offset):
     result= np.zeros((256, 256, 3), np.uint8)
-    scale=(255-10)/max(size[0],size[1])
+    scale=(255-30)/max(size[0],size[1])
     size=(int(scale*size[0]),int(scale*size[1]))
     box=np.array([[[0, 0], [size[0], 0], [size[0], size[1]], [0, size[1]]]])
     box+=[int((255-size[0])/2),int((255-size[1])/2)]
@@ -218,6 +218,8 @@ def create_img(inputpath,stylepath=None,noise=False):
 
 def create_facade(mask,offset,style=None):
     box=create_facde_labemap(mask,offset)
+    box.sort(key=lambda x:(x[3]-x[2])*(x[1]-x[0]),reverse=True)
+    print(box)
     create_facade_texture("{}L.png".format(offset),offset,style)
     crop_facade(offset,box)
     xml_rewrite("{}.xml".format(offset),box)
@@ -313,12 +315,12 @@ def crop_window(id,offset,box):
         ])
     
 
-width,depth,height=5,12,7
+width,depth,height=24,20,20
 for i in range(4):
     if i%2:
         temp=depth
     else:
         temp=width
     create_facade_input((temp,height),16*i)
-    create_facade("{}I.png".format(16*i),16*i,"facade_style.jpg")
-    creat_windows("{}.xml".format(16*i),16*i,"style3.png")
+    create_facade("{}I.png".format(16*i),16*i,"facade_style4.jpg")
+    creat_windows("{}.xml".format(16*i),16*i,"style5.png")
