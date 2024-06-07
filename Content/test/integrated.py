@@ -315,12 +315,12 @@ def crop_window(id,offset,box):
         ])
     
 
-width,depth,height=24,20,20
+width,depth,height=24,20,30
 for i in range(4):
     if i%2:
         temp=depth
     else:
         temp=width
     create_facade_input((temp,height),16*i)
-    create_facade("{}I.png".format(16*i),16*i,"facade_style4.jpg")
-    creat_windows("{}.xml".format(16*i),16*i,"style5.png")
+    create_facade("{}I.png".format(16*i),16*i,"facade_style"+str(random.randint(1,6))+".jpg")
+    creat_windows("{}.xml".format(16*i),16*i,"style"+str(random.randint(1,5))+".png")
